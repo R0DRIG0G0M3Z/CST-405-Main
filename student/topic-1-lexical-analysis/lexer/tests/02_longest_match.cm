@@ -1,0 +1,2 @@
+/* Expected: six two-character operator tokens and 0 lexical errors. */
+a<=b >= c==d != e && ready || finished

@@ -1,0 +1,18 @@
+/* Additional student test.
+ * Expected: 0 lexical errors. This checks identifiers, an array, comments,
+ * operators, delimiters, and keywords used later in the course. */
+int calculate_total(int item_count) {
+    int values[3];
+    int total;
+    total = 0;
+
+    // Add each value to the total.
+    for (item_count = 0; item_count < 3; item_count = item_count + 1) {
+        total = total + values[item_count];
+    }
+
+    if (total >= 10) {
+        print(total);
+    }
+    return total;
+}

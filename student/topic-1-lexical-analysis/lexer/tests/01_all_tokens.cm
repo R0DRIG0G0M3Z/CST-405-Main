@@ -1,0 +1,5 @@
+/* Expected: all required tokens are printed and there are 0 lexical errors. */
+int print return if else while for switch case default break
+student_name total2 _index 0 42 100
++ - * / < > <= >= == != && || ! =
+; : , ( ) { } [ ]

@@ -1,0 +1,6 @@
+/* Expected: comments produce no tokens and locations after them stay correct. */
+int x; // this line comment is ignored
+/* This block comment
+   takes up two lines. */
+x = 10;
+print(x);

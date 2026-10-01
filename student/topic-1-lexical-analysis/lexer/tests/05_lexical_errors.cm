@@ -1,0 +1,5 @@
+/* Expected: four lexical errors are reported and the program exits with 1. */
+x = y @ z;
+total = $amount;
+result = value ? 1;
+number = 4 # 2;

@@ -1,0 +1,4 @@
+/* Expected: keywords and similar identifiers are different, with 0 errors. */
+int integer print printer return returning
+if if_value else elsewhere while while2 for format
+switch switches case cases default default_value break breakfast
