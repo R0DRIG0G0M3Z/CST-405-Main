@@ -11,11 +11,9 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 #ifndef SEMANTIC_H
@@ -23,10 +21,10 @@
 
 #include "ast.h"
 
-/* SEMANTIC ANALYSIS - WITH FUNCTION SUPPORT
+/* SEMANTIC ANALYSIS
  * This phase checks the semantic correctness of the program
  * Ensures variables are declared before use, no redeclarations, etc.
- * Now supports functions, scopes, parameters, and control flow
+ * Topic 2 uses one scope and integer expressions
  */
 
 /* SEMANTIC ERROR TRACKING */

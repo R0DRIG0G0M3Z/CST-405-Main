@@ -12,16 +12,14 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
-/* SEMANTIC ANALYSIS IMPLEMENTATION - WITH FUNCTION SUPPORT
+/* SEMANTIC ANALYSIS IMPLEMENTATION
  * Performs semantic checks on the Abstract Syntax Tree
- * Now supports functions, scopes, parameters, control flow
+ * Topic 2 uses one scope and integer expressions
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,48 +178,51 @@ static void checkStmtList(ASTNode* node);
 
 /* Check expression for semantic correctness */
 static void checkExpr(ASTNode* node) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — CHECK AN EXPRESSION
-     * Walk the expression and report anything that cannot mean what it says.
-     *
-     *     NODE_NUM    always fine
-     *     NODE_VAR    the name must be declared and VISIBLE here
-     *                 -> isVarDeclaredInScope(node->data.name)
-     *     NODE_BINOP  nothing to check about the operator itself; recurse into
-     *                 both operands
-     *
-     * When you report an error: give the LINE NUMBER (node->lineno), name the
-     * identifier, and say what would fix it.  Compare these two messages and
-     * decide which one you would rather receive:
-     *
-     *     error: undeclared identifier
-     *     line 7: 'totl' is not declared — did you mean 'total'?
-     *
-     * Increment semInfo.errorCount for each error.  Do NOT stop at the first
-     * one: report everything you can find in a single run.
-     * ---------------------------------------------------------------- */
-    (void)node;
+    if (!node) return;
+    switch (node->type) {
+    case NODE_NUM: break;  /* Every expression has the single type int. */
+    case NODE_VAR:
+        if (!isVarDeclaredInScope(node->data.name)) {
+            fprintf(stderr,"Semantic error at line %d, column %d: '%s' is not declared; declare it before use.\n",
+                    node->lineno,node->colno,node->data.name);
+            semInfo.errorCount++;
+        }
+        break;
+    case NODE_BINOP:
+        checkExpr(node->data.binop.left);
+        checkExpr(node->data.binop.right);
+        break;
+    default: break;
+    }
 }
 
 /* Check statement */
 static void checkStmt(ASTNode* node) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — CHECK A STATEMENT
-     *     NODE_DECL    the name must NOT already be declared in this scope.
-     *                  On success, add it: addVarToScope(name).
-     *     NODE_ASSIGN  the target must already be declared; then check the
-     *                  expression on the right with checkExpr.
-     *     NODE_PRINT   check the expression.
-     *     NODE_STMT_LIST  recurse into both halves via checkStmtList.
-     *
-     * Order matters in NODE_ASSIGN and it is easy to get backwards.  For
-     *     int x;  x = x + 1;
-     * checking the right-hand side must happen with x already in scope.  For
-     *     int x = x + 1;
-     * (a form this language does not have — but think about it) it should not.
-     * Languages differ here, and this is where that decision gets made.
-     * ---------------------------------------------------------------- */
-    (void)node;
+    if (!node) return;
+    switch (node->type) {
+    case NODE_DECL:
+        if (isReservedName(node->data.decl.name)) {
+            reportReserved(node->data.decl.name,node->lineno);
+            semInfo.errorCount++;
+        } else if (addVarToScope(node->data.decl.name)<0) {
+            fprintf(stderr,"Semantic error at line %d, column %d: duplicate declaration or scope limit for '%s'; use a unique name (maximum %d variables).\n",
+                    node->lineno,node->colno,node->data.decl.name,MAX_VARS);
+            semInfo.errorCount++;
+        }
+        break;
+    case NODE_ASSIGN:
+        if (!isVarDeclaredInScope(node->data.assign.var)) {
+            fprintf(stderr,"Semantic error at line %d, column %d: assignment target '%s' is not declared; declare it before use.\n",
+                    node->lineno,node->colno,node->data.assign.var);
+            semInfo.errorCount++;
+        }
+        /* Visit the RHS even when the target is invalid: report all errors. */
+        checkExpr(node->data.assign.value);
+        break;
+    case NODE_PRINT: checkExpr(node->data.expr); break;
+    case NODE_STMT_LIST: checkStmtList(node); break;
+    default: break;
+    }
 }
 
 /* Check statement list */
@@ -242,7 +243,7 @@ int performSemanticAnalysis(ASTNode* root) {
         return -1;
     }
 
-    trace("Running semantic analysis with function support...\n\n");
+    trace("Running semantic analysis for the Topic 2 integer language...\n\n");
 
     /* Enter global scope */
     enterScope();
@@ -252,6 +253,8 @@ int performSemanticAnalysis(ASTNode* root) {
     /* The starter language has no functions, so one walk over the statement
      * list is the whole analysis.  Topic 3 replaces this with two passes. */
     checkStmtList(root);
+
+    printSemanticScopes();
 
     /* Exit global scope */
     exitScope();

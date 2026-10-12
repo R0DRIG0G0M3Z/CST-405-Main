@@ -1,0 +1,10 @@
+# Rebuild these locally from the authored sources.
+*.o
+minicompiler
+lex.yy.c
+parser.tab.c
+parser.tab.h
+parser.output
+*.s
+*.tac
+__pycache__/

@@ -1,95 +1,77 @@
-/* =========================================================================
- * CST-405  ·  TOPIC 2  ·  Compiler for a Starter Language
- * FILE: ast.c   —   Phase 2 — Syntax analysis (the tree it builds)
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *                        ^^^  this file
- *
- * WHAT IS NEW IN TOPIC 2
- *   • One constructor per node kind, plus a tree printer
- *
- * WHAT COMES NEXT
- *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
- *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
- * ========================================================================= */
-
-/* AST IMPLEMENTATION
- * Functions to create and manipulate Abstract Syntax Tree nodes
- * The AST is built during parsing and used for all subsequent phases
+/* CST-405 Project 2: AST construction and display.
+ * Input: Bison reductions. Output: owned nodes consumed by semantics and TAC.
+ * The AST discards punctuation; parse_tree.c keeps it for comparison.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ast.h"
-
-/* External line number from scanner */
 extern int yylineno;
 
-/* Create a number literal node */
-ASTNode* createNum(int value) {
-    ASTNode* node = malloc(sizeof(ASTNode));
-    node->type = NODE_NUM;
-    node->lineno = yylineno;
-    node->data.num = value;  /* Store the integer value */
-    return node;
+static ASTNode* node(NodeType type) {
+    ASTNode* n = calloc(1, sizeof *n);
+    if (!n) { perror("AST allocation"); exit(1); }
+    n->type = type; n->lineno = yylineno; n->colno = 1;
+    return n;
 }
-
-/* Create a variable reference node */
-ASTNode* createVar(char* name) {
-    ASTNode* node = malloc(sizeof(ASTNode));
-    node->type = NODE_VAR;
-    node->lineno = yylineno;
-    node->data.name = strdup(name);  /* Copy the variable name */
-    return node;
+ASTNode* createNum(int value) { ASTNode* n=node(NODE_NUM); n->data.num=value; return n; }
+ASTNode* createVar(char* name) { ASTNode* n=node(NODE_VAR); n->data.name=strdup(name); return n; }
+ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
+    ASTNode* n=node(NODE_BINOP); n->data.binop.op=op;
+    n->data.binop.left=left; n->data.binop.right=right; return n;
 }
-
-/* --------------------------------------------------------------------
- * TODO (Topic 2) — THE REMAINING AST CONSTRUCTORS
- * createNum and createVar above are the pattern.  Every constructor does
- * the same four things:
- *
- *     ASTNode* node = malloc(sizeof(ASTNode));
- *     node->type   = NODE_XXX;          <- which kind of node this is
- *     node->lineno = yylineno;          <- where it came from, for errors
- *     ... store the children ...
- *     return node;
- *
- * Write: createBinOp, createDecl, createAssign, createPrint, createStmtList.
- *
- * strdup every char* you store.  The scanner's buffer is reused for the
- * next token, so a name you merely point at will have changed by the time
- * the semantic analyzer reads it.  That bug looks like the AST being
- * randomly corrupted, and it is one of the hardest to find in this course.
- *
- * createStmtList is the one worth thinking about: it links two statements
- * into a list, and the grammar is LEFT recursive, so $1 is the list so far
- * and $2 is the new statement.  Draw the tree for a three-statement
- * program before you write it.
- * -------------------------------------------------------------------- */
-
-
-/* Display the AST structure (for debugging and education) */
-void printAST(ASTNode* node, int level) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — THE TREE PRINTER
-     * Print the tree, one node per line, indented two spaces per level.
-     *
-     *     if (!node) return;
-     *     for (int i = 0; i < level; i++) printf("  ");
-     *     switch (node->type) { ... one case per node kind ... }
-     *
-     * Recurse into children with level + 1 so the indentation shows the shape.
-     * NODE_STMT_LIST is the exception: print its two children at the SAME
-     * level, because a list of statements is a sequence, not a nesting.
-     *
-     * This function is not decoration.  It is the only window you have into
-     * Phase 2, and every bug you hit for the rest of the semester gets
-     * diagnosed by staring at its output.  Write it early and make it good.
-     * ---------------------------------------------------------------- */
+ASTNode* createDecl(char* type, char* name) {
+    ASTNode* n=node(NODE_DECL); n->data.decl.varType=strdup(type);
+    n->data.decl.name=strdup(name); return n;
+}
+ASTNode* createAssign(char* var, ASTNode* value) {
+    ASTNode* n=node(NODE_ASSIGN); n->data.assign.var=strdup(var);
+    n->data.assign.value=value; return n;
+}
+ASTNode* createPrint(ASTNode* expr) { ASTNode* n=node(NODE_PRINT); n->data.expr=expr; return n; }
+ASTNode* createStmtList(ASTNode* first, ASTNode* second) {
+    if (!first) return second;
+    if (!second) return first;
+    /* Left-recursive grammar: the left child is the preceding sequence.
+     * Every visitor walks it before the newly appended right child. */
+    ASTNode* n=node(NODE_STMT_LIST);
+    n->data.stmtlist.stmt=first; n->data.stmtlist.next=second; return n;
+}
+const char* opText(char op) { return op=='+' ? "+" : "?"; }
+void printAST(ASTNode* n, int level) {
+    if (!n) return;
+    if (n->type==NODE_STMT_LIST) {
+        printAST(n->data.stmtlist.stmt, level);
+        printAST(n->data.stmtlist.next, level); return;
+    }
+    printf("%*s", level*2, "");
+    switch(n->type) {
+    case NODE_NUM: printf("NUM %d",n->data.num); break;
+    case NODE_VAR: printf("VAR %s",n->data.name); break;
+    case NODE_BINOP: printf("ADD"); break;
+    case NODE_DECL: printf("DECL %s %s",n->data.decl.varType,n->data.decl.name); break;
+    case NODE_ASSIGN: printf("ASSIGN %s",n->data.assign.var); break;
+    case NODE_PRINT: printf("PRINT"); break;
+    default: break;
+    }
+    printf(" [line %d, column %d]\n",n->lineno,n->colno);
+    if(n->type==NODE_BINOP) {
+        printAST(n->data.binop.left,level+1); printAST(n->data.binop.right,level+1);
+    } else if(n->type==NODE_ASSIGN) printAST(n->data.assign.value,level+1);
+    else if(n->type==NODE_PRINT) printAST(n->data.expr,level+1);
+}
+/* Nodes own duplicated names and their child nodes. Bison also uses this
+ * destructor to release partially built ASTs during error recovery. */
+void freeAST(ASTNode* n) {
+    if(!n) return;
+    switch(n->type) {
+    case NODE_VAR: free(n->data.name); break;
+    case NODE_DECL: free(n->data.decl.name); free(n->data.decl.varType); break;
+    case NODE_BINOP: freeAST(n->data.binop.left); freeAST(n->data.binop.right); break;
+    case NODE_ASSIGN: free(n->data.assign.var); freeAST(n->data.assign.value); break;
+    case NODE_PRINT: freeAST(n->data.expr); break;
+    case NODE_STMT_LIST: freeAST(n->data.stmtlist.stmt); freeAST(n->data.stmtlist.next); break;
+    default: break;
+    }
+    free(n);
 }
