@@ -12,11 +12,9 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 /* ============================================================================
@@ -42,6 +40,7 @@
 #include "symtab.h"
 #include "trace.h"
 
+static int pinned[NUM_TEMP_REGS]; /* operands used by the current instruction */
 static FILE* out;                 /* The .s file being written              */
 RegisterAllocator regAlloc;       /* The $t0-$t9 cache                      */
 
@@ -154,15 +153,12 @@ static int findVarReg(const char* name) {
  * to lose.  A real compiler would use liveness information here; LRU is a
  * good approximation and is easy to reason about in class. */
 static int selectVictimReg(void) {
-    int victim = 0, oldest = regAlloc.regs[0].lastUsed;
-    for (int i = 1; i < NUM_TEMP_REGS; i++) {
-        /* Values with no memory home are the cheapest to discard */
-        if (!regAlloc.regs[i].hasHome && regAlloc.regs[i].inUse) return i;
-        if (regAlloc.regs[i].lastUsed < oldest) {
-            oldest = regAlloc.regs[i].lastUsed;
-            victim = i;
-        }
+    int victim=-1;
+    for(int i=0;i<NUM_TEMP_REGS;i++) {
+        if(pinned[i]) continue;
+        if(victim<0 || regAlloc.regs[i].lastUsed<regAlloc.regs[victim].lastUsed) victim=i;
     }
+    if(victim<0) { fprintf(stderr,"No unpinned register available\n"); exit(1); }
     return victim;
 }
 
@@ -362,15 +358,6 @@ static void emitEpilogue(const char* name, int size) {
 /* MIPS mnemonic for each arithmetic / relational / logical TAC opcode.
  * SPIM accepts the three-operand pseudo-instructions used here (mul, div,
  * slt, sgt, sle, sge, seq, sne), expanding them to real instructions. */
-static const char* mnemonicFor(TACOp op) {
-    switch (op) {
-        case TAC_ADD: return "add";
-        case TAC_SUB: return "sub";
-        case TAC_MUL: return "mul";
-        case TAC_DIV: return "div";
-        default:      return NULL;
-    }
-}
 
 /* Emit the .data section: one entry per global declaration. */
 static void emitDataSection(TACInstr* head) {
@@ -433,49 +420,51 @@ void generateMIPSFromTAC(const char* filename) {
         emitPrologue(currentFunc, frameSize);
 
         for (TACInstr* i = c->next; i && i->op != TAC_FUNC_END; i = i->next) {
-            /* --------------------------------------------------------
-             * TODO (Topic 2) — TAC -> MIPS
-             * One case per TAC opcode.  Everything you need is already written above:
-             *
-             *     operandReg(name)   register holding that value (loads it, or does
-             *                        `li` if it is a literal)
-             *     defReg(name)       register to WRITE a new value of `name` into
-             *     flushRegisters()   write every dirty register back to memory
-             *
-             *   TAC_DECL     no instruction — the slot was reserved by layoutFrame().
-             *                Emit a comment saying where it lives; you will be glad of
-             *                it the first time you read your own assembly.
-             *
-             *   TAC_ASSIGN   result = arg1
-             *                    int a = operandReg(i->arg1);
-             *                    int d = defReg(i->result);
-             *                    move $td, $ta
-             *
-             *   TAC_ADD      result = arg1 + arg2   ->   add $td, $ta, $tb
-             *
-             *   TAC_PRINT    print arg1, using the SPIM syscalls:
-             *                    move $a0, $t<arg>
-             *                    li   $v0, 1        # 1 = print integer
-             *                    syscall
-             *                    la   $a0, __nl     # then a newline
-             *                    li   $v0, 4        # 4 = print string
-             *                    syscall
-             *
-             *   TAC_RETURN   put the value in $v0, then jump to the epilogue label.
-             *                Do NOT just fall through.
-             *
-             * WHY defReg AND operandReg ARE DIFFERENT
-             *   operandReg must LOAD the value from memory if it is not already in a
-             *   register.  defReg must not: the register is about to be overwritten,
-             *   so loading first is a wasted instruction.  Use the wrong one and your
-             *   code still works — just with an extra `lw` everywhere.  Reading your
-             *   own output and spotting that is a genuinely good exercise.
-             * -------------------------------------------------------- */
+            memset(pinned,0,sizeof pinned);
+            switch(i->op) {
+            case TAC_DECL: {
+                Symbol* symbol=lookupSymbol(i->result);
+                fprintf(out,"    # int %s at %d($sp), initially zero\n",i->result,symbol->offset);
+                int d=defReg(i->result);
+                fprintf(out,"    move $t%d, $zero\n",d); break;
+            }
+            case TAC_ASSIGN: {
+                int a=operandReg(i->arg1); pinned[a]=1;
+                int d=defReg(i->result);
+                if(a!=d) fprintf(out,"    move $t%d, $t%d\n",d,a);
+                break;
+            }
+            case TAC_ADD: {
+                /* Pin both operands: allocating the destination must never
+                 * evict a value before this instruction has read it. */
+                int a=operandReg(i->arg1); pinned[a]=1;
+                int b=operandReg(i->arg2); pinned[b]=1;
+                int d=defReg(i->result);
+                fprintf(out,"    addu $t%d, $t%d, $t%d\n",d,a,b); break;
+            }
+            case TAC_PRINT: {
+                int a=operandReg(i->arg1);
+                fprintf(out,"    move $a0, $t%d\n    li   $v0, 1\n    syscall\n",a);
+                fprintf(out,"    la   $a0, __nl\n    li   $v0, 4\n    syscall\n"); break;
+            }
+            case TAC_RETURN:
+                if(i->arg1) {
+                    int a=operandReg(i->arg1);
+                    fprintf(out,"    move $v0, $t%d\n",a);
+                }
+                flushRegisters("return");
+                fprintf(out,"    j %s__epilogue\n    nop\n",funcLabel(currentFunc));
+                break;
+            default:
+                fprintf(stderr,"Unsupported Topic 2 TAC opcode %d\n",i->op); exit(1);
+            }
         }
 
         flushRegisters("end of function body");
         emitEpilogue(currentFunc, frameSize);
     }
 
-    fclose(out);
+    int failed=ferror(out);
+    if(fclose(out)!=0) failed=1;
+    if(failed) { fprintf(stderr,"Failed to save assembly %s\n",filename); exit(1); }
 }

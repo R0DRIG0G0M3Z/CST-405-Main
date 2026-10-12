@@ -13,10 +13,10 @@
 CC     = gcc
 LEX    = flex
 YACC   = bison
-CFLAGS = -g -Wall
+CFLAGS ?= -g -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L
 
 TARGET = minicompiler
-OBJS   = lex.yy.o parser.tab.o main.o ast.o symtab.o semantic.o codegen.o tac.o
+OBJS   = lex.yy.o parser.tab.o main.o ast.o parse_tree.o symtab.o semantic.o codegen.o tac.o
 
 all: $(TARGET)
 
@@ -28,8 +28,8 @@ $(TARGET): $(OBJS)
 lex.yy.c: scanner.l parser.tab.h
 	$(LEX) scanner.l
 
-parser.tab.c parser.tab.h: parser.y
-	$(YACC) -d parser.y
+parser.tab.c parser.tab.h &: parser.y ast.h parse_tree.h
+	$(YACC) -Wall -d parser.y
 
 lex.yy.o: lex.yy.c
 	$(CC) $(CFLAGS) -c lex.yy.c
@@ -37,10 +37,12 @@ lex.yy.o: lex.yy.c
 parser.tab.o: parser.tab.c
 	$(CC) $(CFLAGS) -c parser.tab.c
 
-main.o:     main.c ast.h semantic.h codegen.h tac.h trace.h
+main.o:     main.c ast.h semantic.h codegen.h tac.h trace.h parse_tree.h
 	$(CC) $(CFLAGS) -c main.c
 ast.o:      ast.c ast.h
 	$(CC) $(CFLAGS) -c ast.c
+parse_tree.o: parse_tree.c parse_tree.h
+	$(CC) $(CFLAGS) -c parse_tree.c
 symtab.o:   symtab.c symtab.h trace.h
 	$(CC) $(CFLAGS) -c symtab.c
 semantic.o: semantic.c semantic.h ast.h symtab.h trace.h
@@ -56,11 +58,7 @@ tac.o:      tac.c tac.h ast.h trace.h
 # regression suite.
 # ----------------------------------------------------------------------------
 test: $(TARGET)
-	@for f in tests/*.cm; do \
-	   echo "── $$f ─────────────────────────────────────────"; \
-	   ./$(TARGET) $$f $${f%.cm}.s -q > /dev/null || { echo "  COMPILE FAILED"; continue; }; \
-	   spim -file $${f%.cm}.s 2>/dev/null | grep -v '^Loaded'; \
-	done
+	python3 tests/run_tests.py
 
 clean:
 	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h parser.output

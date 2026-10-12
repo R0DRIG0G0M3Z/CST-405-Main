@@ -1,90 +1,64 @@
-/* =========================================================================
- * CST-405  ·  TOPIC 2  ·  Compiler for a Starter Language
- * FILE: scanner.l   —   Phase 1 — Lexical analysis
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *   ^^^^^^^  this file
- *
- * WHAT IS NEW IN TOPIC 2
- *   • The starter token set: `int`, `print`, identifiers, numbers,
- *   • `+`, `=`, `;`, `(`, `)`, and both comment forms
- *
- * WHAT COMES NEXT
- *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
- *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
- * ========================================================================= */
-
-%{
-/* PHASE 1 — LEXICAL ANALYSIS
- *
- * The scanner turns a stream of CHARACTERS into a stream of TOKENS.
- * It is the only part of the compiler that ever sees whitespace or comments.
- *
- *      int  sum  =  a + 10 ;
- *      └─┬┘ └─┬┘ │  │ │ └┬┘ │
- *       INT  ID  '=' ID '+' NUM ';'
- *
- * Flex turns the rules below into a finite automaton.  Two rules decide
- * everything you need to know about how it behaves:
- *
- *   LONGEST MATCH   "<=" wins over "<" because it matches more characters.
- *                   This is why "<=" must exist as a rule at all, and why
- *                   its position in the file does not matter.
- *   FIRST MATCH     when two rules match the SAME length, the one written
- *                   first wins.  This is why the keyword rules sit above
- *                   the identifier rule: without that order, "int" would
- *                   come back as an ID.
+/* CST-405 Project 2: lexical analysis.
+ * Input: source characters. Output: tokens, values, and exact locations.
+ * All matches advance the location, including ignored whitespace/comments.
+ * Invalid characters and unterminated comments increment lexicalErrors,
+ * so they can never be silently skipped and certified as valid source.
  */
+%{
 #include <stdio.h>
 #include <stdlib.h>
-#include "parser.tab.h"  /* Token definitions from Bison */
+#include <string.h>
+#include <errno.h>
+#include <limits.h>
+#include "parser.tab.h"
+int lexicalErrors=0;
+static int line=1,column=1,commentLine,commentColumn;
+#define YY_USER_ACTION updateLocation(yytext,yyleng);
+static void updateLocation(const char* text,int length) {
+    yylloc.first_line=line; yylloc.first_column=column;
+    for(int i=0;i<length;i++) {
+        yylloc.last_line=line; yylloc.last_column=column;
+        if(text[i]=='\n') { line++; column=1; } else column++;
+    }
+    yylineno=line;
+}
+static void lexicalError(const char* message) {
+    lexicalErrors++;
+    fprintf(stderr,"Lexical error at line %d, column %d: %s\n",
+            yylloc.first_line,yylloc.first_column,message);
+}
 %}
-
-/* Flex options to suppress warnings for unused functions */
-%option nounput
-%option noinput
-%option yylineno
-
+%option noyywrap nounput noinput nodefault
+%x COMMENT
 %%
-
-"int"           { return INT; }
-"print"         { return PRINT; }
-
+"int" { return INT; }
+"print" { return PRINT; }
 [a-zA-Z_][a-zA-Z0-9_]* {
-    yylval.str = strdup(yytext);
-    return ID;
+    /* The supplied register allocator stores names in a 64-byte field. */
+    if(yyleng>63) { lexicalError("identifier exceeds 63 characters"); return INVALID; }
+    yylval.str=strdup(yytext); return ID;
 }
-
-[0-9]+          {
-    yylval.num = atoi(yytext);
-    return NUM;
+[0-9]+ {
+    errno=0; long value=strtol(yytext,NULL,10);
+    if(errno==ERANGE || value>INT_MAX) {
+        lexicalError("integer literal exceeds 2147483647"); return INVALID;
+    }
+    yylval.num=(int)value; return NUM;
 }
-
-
-"+"             { return '+'; }
-
-
-"="             { return '='; }
-
-";"             { return ';'; }
-"("             { return '('; }
-")"             { return ')'; }
-
-"//".*          { /* Skip single-line comments */ }
-"/*"([^*]|\*+[^*/])*\*+"/"  { /* Skip multi-line comments */ }
-
-[ \t\n]         { }
-
-.               { printf("Lexical Error: Unknown character '%c'\n", *yytext); }
-
+[+=;()] { return (unsigned char)yytext[0]; }
+"//"[^\n]* { /* line comment */ }
+"/*" { commentLine=yylloc.first_line; commentColumn=yylloc.first_column; BEGIN(COMMENT); }
+<COMMENT>"*/" { BEGIN(INITIAL); }
+<COMMENT>[^*\n]+ { }
+<COMMENT>"*" { }
+<COMMENT>\n { }
+<COMMENT><<EOF>> {
+    lexicalErrors++;
+    fprintf(stderr,"Lexical error at line %d, column %d: unterminated block comment\n",commentLine,commentColumn);
+    BEGIN(INITIAL); return 0;
+}
+[ \t\r\n]+ { }
+. { char message[64]; snprintf(message,sizeof message,"unknown character '%c'",yytext[0]);
+    lexicalError(message); return INVALID; }
+<<EOF>> { yylloc.first_line=line; yylloc.first_column=column; return 0; }
 %%
-
-int yywrap() {
-    return 1;
-}

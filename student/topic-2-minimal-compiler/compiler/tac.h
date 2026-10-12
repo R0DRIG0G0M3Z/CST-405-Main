@@ -11,11 +11,9 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 #ifndef TAC_H
@@ -24,10 +22,10 @@
 #include <stddef.h>
 #include "ast.h"
 
-/* THREE-ADDRESS CODE (TAC) - WITH FUNCTION SUPPORT
+/* THREE-ADDRESS CODE (TAC)
  * Intermediate representation between AST and machine code
  * Each instruction has at most 3 operands (result = arg1 op arg2)
- * Now supports functions, control flow, and all operators
+ * This interface reserves opcodes for future topics; Topic 2 emits only its subset
  */
 
 /* TAC INSTRUCTION TYPES
@@ -153,5 +151,8 @@ int  countTAC(const TACList* list);         /* Instruction count (a size metric)
 void formatTAC(const TACInstr* i, char* buf, size_t n);  /* Render one instruction */
 void saveTACToFile(const char* filename);
 void saveOptimizedTACToFile(const char* filename);
+
+void copyTACWithoutOptimization(void);
+void freeTAC(void);
 
 #endif

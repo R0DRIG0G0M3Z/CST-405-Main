@@ -7,16 +7,14 @@
  *                                           ^^^  this file
  *
  * WHAT IS NEW IN TOPIC 2
- *   • AST -> three-address code, plus the optimizer skeleton
+ *   • AST -> three-address code, constant folding and propagation
  *
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 #include <stdio.h>
@@ -61,6 +59,7 @@ char* allocTemp() {
         trace("    [TAC ALLOC] Reusing temporary t%d\n", tempNum);
     } else {
         tempNum = tempAlloc.maxUsed++;
+        tacList.tempCount = tempAlloc.maxUsed;
         if (tempNum >= MAX_TEMPS) {
             fprintf(stderr, "ERROR: Exceeded maximum temporaries\n");
             exit(1);
@@ -75,10 +74,11 @@ char* allocTemp() {
 }
 
 void freeTemp(char* temp) {
-    if (!temp || temp[0] != 't') return;
+    if (!temp || temp[0] != 't' || !isdigit((unsigned char)temp[1])) return;
+    for (int i=1;temp[i];i++) if (!isdigit((unsigned char)temp[i])) return;
 
     int tempNum = atoi(temp + 1);
-    if (!tempAlloc.allocated[tempNum]) return;
+    if (tempNum<0 || tempNum>=MAX_TEMPS || !tempAlloc.allocated[tempNum]) return;
 
     tempAlloc.allocated[tempNum] = 0;
     if (tempAlloc.freeCount < MAX_TEMPS) {
@@ -138,32 +138,23 @@ static void generateTACStmt(ASTNode* node);
 
 /* Generate TAC for expression - returns the temp/var holding result */
 char* generateTACExpr(ASTNode* node) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — EXPRESSION -> THREE-ADDRESS CODE
-     * Return the NAME of the location holding this expression's value.  That
-     * return value is the whole contract, and it is what makes the recursion
-     * work: a caller does not care whether it gets back a literal, a variable
-     * or a temporary, only that it can name the value.
-     *
-     *     NODE_NUM    return a string holding the literal, e.g. "42"
-     *     NODE_VAR    return a copy of the variable's name
-     *     NODE_BINOP  t = allocTemp();
-     *                 left  = generateTACExpr(left child)
-     *                 right = generateTACExpr(right child)
-     *                 emit  t = left + right
-     *                 freeTemp(left); freeTemp(right);
-     *                 return t
-     *
-     * Free the operand temporaries AFTER emitting, never before: freeing t1
-     * and then using it in the instruction you are about to emit is how you
-     * end up with two live values in the same temporary.
-     *
-     * For  a + b + c  you should get exactly three instructions.  If you get
-     * four, or if a temporary number is reused while still live, print the
-     * TAC and walk it by hand — that listing is the point of this phase.
-     * ---------------------------------------------------------------- */
-    (void)node;
-    return NULL;
+    if (!node) return NULL;
+    if (node->type==NODE_NUM) {
+        char value[32]; snprintf(value,sizeof value,"%d",node->data.num);
+        return strdup(value);
+    }
+    if (node->type==NODE_VAR) return strdup(node->data.name);
+    if (node->type==NODE_BINOP) {
+        /* Postorder traversal: children must be computed before their sum.
+         * The TAC instruction owns copies, so local strings can be freed. */
+        char* left=generateTACExpr(node->data.binop.left);
+        char* right=generateTACExpr(node->data.binop.right);
+        char* result=allocTemp();
+        appendTAC(createTAC(TAC_ADD,left,right,result));
+        freeTemp(left); freeTemp(right); free(left); free(right);
+        return result;
+    }
+    fprintf(stderr,"Internal TAC error: expression expected\n"); exit(1);
 }
 
 /* Generate TAC for statement list */
@@ -180,17 +171,24 @@ static void generateTACStmtList(ASTNode* node) {
 
 /* Generate TAC for a statement */
 static void generateTACStmt(ASTNode* node) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — STATEMENT -> THREE-ADDRESS CODE
-     *     NODE_DECL    emit TAC_DECL — no code runs, but the back end needs to
-     *                  know the variable exists so it can reserve a slot
-     *     NODE_ASSIGN  evaluate the expression, then emit TAC_ASSIGN
-     *     NODE_PRINT   evaluate the expression, then emit TAC_PRINT
-     *     NODE_STMT_LIST  recurse
-     *
-     * Use appendTAC(createTAC(op, arg1, arg2, result)) to emit.
-     * ---------------------------------------------------------------- */
-    (void)node;
+    if (!node) return;
+    switch (node->type) {
+    case NODE_DECL:
+        appendTAC(createTAC(TAC_DECL,node->data.decl.varType,NULL,node->data.decl.name));
+        break;
+    case NODE_ASSIGN: {
+        char* value=generateTACExpr(node->data.assign.value);
+        appendTAC(createTAC(TAC_ASSIGN,value,NULL,node->data.assign.var));
+        freeTemp(value); free(value); break;
+    }
+    case NODE_PRINT: {
+        char* value=generateTACExpr(node->data.expr);
+        appendTAC(createTAC(TAC_PRINT,value,NULL,NULL));
+        freeTemp(value); free(value); break;
+    }
+    case NODE_STMT_LIST: generateTACStmtList(node); break;
+    default: break;
+    }
 }
 
 void generateTAC(ASTNode* node) {
@@ -259,7 +257,8 @@ void formatTAC(const TACInstr* i, char* buf, size_t n) {
         case TAC_CALL:       snprintf(buf, n, "%s = CALL %s, %s",
                                       i->result, i->arg1, i->arg2); break;
         case TAC_RETURN:     if (i->arg1) snprintf(buf, n, "RETURN %s", i->arg1);
-                             else         snprintf(buf, n, "RETURN"); break;
+                             else         snprintf(buf, n, "RETURN");
+                             break;
         case TAC_LABEL:      snprintf(buf, n, "%s:", i->result); break;
         case TAC_GOTO:       snprintf(buf, n, "GOTO %s", i->arg1); break;
         case TAC_IF_FALSE:   snprintf(buf, n, "IF_FALSE %s GOTO %s", i->arg1, i->arg2); break;
@@ -303,7 +302,7 @@ TACList* getUnoptimizedTAC(void) { return &tacList; }
 
 static void saveList(const TACList* list, const char* filename, const char* banner) {
     FILE* f = fopen(filename, "w");
-    if (!f) { fprintf(stderr, "Cannot write %s\n", filename); return; }
+    if (!f) { fprintf(stderr, "Cannot write %s\n", filename); exit(1); }
     char buf[256];
     fprintf(f, "; %s\n", banner);
     fprintf(f, "; Generated by the CST-405 mini compiler\n;\n");
@@ -316,7 +315,9 @@ static void saveList(const TACList* list, const char* filename, const char* bann
             fprintf(f, "%3d:     %s\n", line++, buf);
     }
     fprintf(f, ";\n; %d instructions\n", countTAC(list));
-    fclose(f);
+    int failed=ferror(f);
+    if (fclose(f)!=0) failed=1;
+    if (failed) { fprintf(stderr,"Failed to save TAC file %s\n",filename); exit(1); }
 }
 
 void saveTACToFile(const char* filename)          { saveList(&tacList,       filename, "Unoptimized three-address code"); }
@@ -337,24 +338,10 @@ void saveOptimizedTACToFile(const char* filename) { saveList(&optimizedList, fil
  * No single pass finds all of that; three passes do.  Reaching a fixed point
  * is the standard way real optimizers are structured.
  *
- * Transformations implemented, in the order they are applied within a pass:
- *
- *   1. Algebraic simplification   x+0, x-0, x*1, x*0, x/1
- *   2. Constant folding           evaluate operations on two literals
- *   3. Constant propagation       replace a variable by a constant known to
- *                                 hold it at that point
- *   4. Copy propagation           replace t1 by x after "t1 = x"
- *   5. Dead code elimination      drop assignments to names never read again
- *   6. Unreachable code removal   drop code between GOTO and the next label
- *   7. Branch simplification      constant conditions become GOTO or nothing
- *
- * SAFETY RULES the passes obey, and that students must not break when they
- * extend this file:
- *   • A LABEL ends a basic block: forget everything known about values,
- *     because control can arrive here from anywhere.
- *   • A CALL may modify globals and arrays: forget facts about non-temporaries.
- *   • Never eliminate a store to an array or a global as "dead"; we do not
- *     track those precisely enough to prove it.
+ * Topic 2 implements constant propagation/folding, addition by zero, and
+ * removal of unused compiler temporaries. There are no branches or loops,
+ * so control-flow transformations have no opportunities in this grammar.
+ * Facts are cleared at labels/functions for conservative future extension.
  * ========================================================================*/
 
 #define MAX_FACTS 256
@@ -444,7 +431,13 @@ static char* foldConstants(TACOp op, const char* a1, const char* a2, int* folded
     if (!isConstantNumber(a1) || !isConstantNumber(a2)) return NULL;
     long a = atol(a1), b = atol(a2), r;
     switch (op) {
-        case TAC_ADD: r = a + b; break;
+        case TAC_ADD:
+            /* The language uses wrapping signed 32-bit integers, matching
+             * MIPS addu; folding must preserve overflow behavior. */
+            r = a + b;
+            if (r > 2147483647L) r -= 4294967296L;
+            if (r < -2147483648L) r += 4294967296L;
+            break;
         case TAC_SUB: r = a - b; break;
         case TAC_MUL: r = a * b; break;
         case TAC_DIV: if (b == 0) return NULL;   /* leave division by zero
@@ -497,37 +490,67 @@ static TACList copyList(const TACList* src) {
  * One optimization pass over `in`, producing `out`.
  * Returns the number of changes made.
  * -----------------------------------------------------------------------*/
+static void freeList(TACList* list);
+
 static TACList optimizePass(TACList* in) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — ONE OPTIMIZATION PASS
-     * Copy `in` to `out`, rewriting what you can along the way.  Start with
-     * the two transformations that pay off immediately on this language:
-     *
-     *   CONSTANT FOLDING     t0 = 2 + 3      ->   t0 = 5
-     *                        Both operands are literals, so do the arithmetic
-     *                        now instead of at run time.  foldConstants() is
-     *                        already written for you.
-     *
-     *   CONSTANT PROPAGATION x = 5 ; y = x + 1   ->   y = 5 + 1
-     *                        Remember that x holds 5, and substitute it into
-     *                        later operands.  Then folding turns that into 6,
-     *                        which is why these two techniques belong together.
-     *
-     *   THE RULE YOU MUST NOT BREAK: forget every remembered value at a LABEL.
-     *   Control can arrive at a label from anywhere, so nothing you learned
-     *   before it is still guaranteed.  Topic 2 has no labels yet — but write
-     *   the code as if it did, because Topic 4 will add them and you will not
-     *   remember this warning then.
-     *
-     * Count every rewrite in changesThisPass so optimizeTAC() knows whether to
-     * run again, and in the matching optStats field so main.c can report it.
-     * ---------------------------------------------------------------- */
     TACList out = { NULL, NULL, in->tempCount, in->labelCount };
-    for (TACInstr* c = in->head; c; c = c->next) {
-        TACInstr* n = createTAC(c->op, c->arg1, c->arg2, c->result);
-        if (!out.head) out.head = out.tail = n;
-        else { out.tail->next = n; out.tail = n; }
+    clearFacts();
+    for (TACInstr* c=in->head; c; c=c->next) {
+        TACInstr* n=createTAC(c->op,c->arg1,c->arg2,c->result);
+        /* Topic 2 has a single straight-line block. Clear facts at control
+         * boundaries defensively; later topics need full flow analysis. */
+        if(n->op==TAC_LABEL || n->op==TAC_FUNC_BEGIN || n->op==TAC_FUNC_END)
+            clearFacts();
+        if(n->op==TAC_CALL) dropNonTempFacts();
+        if(n->op==TAC_ADD || n->op==TAC_ASSIGN || n->op==TAC_PRINT || n->op==TAC_RETURN) {
+            char** args[2]={&n->arg1,&n->arg2};
+            for(int k=0;k<2;k++) {
+                const char* value=lookupFact(*args[k],1);
+                if(value) {
+                    char* copy=strdup(value); free(*args[k]); *args[k]=copy;
+                    changesThisPass++; optStats.constProp++;
+                }
+            }
+        }
+        if(n->op==TAC_ADD) {
+            int folded=0;
+            char* value=foldConstants(n->op,n->arg1,n->arg2,&folded);
+            if(folded) {
+                free(n->arg1); free(n->arg2); n->arg1=value; n->arg2=NULL;
+                n->op=TAC_ASSIGN; changesThisPass++; optStats.constFold++;
+            } else if(strcmp(n->arg1,"0")==0 || strcmp(n->arg2,"0")==0) {
+                /* Local peephole: x+0 and 0+x require only a move. */
+                char* keep=strdup(strcmp(n->arg1,"0")==0 ? n->arg2:n->arg1);
+                free(n->arg1); free(n->arg2); n->arg1=keep; n->arg2=NULL;
+                n->op=TAC_ASSIGN; changesThisPass++; optStats.algebraic++;
+            }
+        }
+        /* RHS substitution happens BEFORE invalidating the destination.
+         * Thus x=x+1 reads the old x and records the newly computed x. */
+        if(n->op==TAC_ASSIGN || mnemonicIsPure(n->op)) {
+            dropFactsAbout(n->result);
+            if(n->op==TAC_ASSIGN && isConstantNumber(n->arg1))
+                recordFact(n->result,n->arg1,1);
+        } else if(n->op==TAC_DECL) recordFact(n->result,"0",1);
+        if(!out.head) out.head=out.tail=n;
+        else { out.tail->next=n; out.tail=n; }
     }
+    /* A second walk removes unused compiler temporaries only. User storage
+     * declarations and print operations always survive. Facts are no longer
+     * used after this walk, so freeing a dead instruction is safe. */
+    TACInstr** link=&out.head;
+    out.tail=NULL;
+    while(*link) {
+        TACInstr* n=*link;
+        int temp=n->result && n->result[0]=='t' && isConstantNumber(n->result+1);
+        if(temp && (n->op==TAC_ASSIGN || mnemonicIsPure(n->op)) &&
+           !isReadLater(n->next,n->result)) {
+            *link=n->next;
+            free(n->arg1); free(n->arg2); free(n->result); free(n);
+            changesThisPass++; optStats.deadCode++;
+        } else { out.tail=n; link=&n->next; }
+    }
+    clearFacts();
     return out;
 }
 
@@ -542,6 +565,7 @@ void optimizeTAC(void) {
     do {
         changesThisPass = 0;
         TACList next = optimizePass(&work);
+        freeList(&work);
         work = next;
         pass++;
         trace("  pass %d: %3d change(s), %3d instructions\n",
@@ -569,3 +593,21 @@ void optimizeTAC(void) {
     trace("  TAC instructions   %d -> %d  (%d removed, %.1f%% smaller)\n\n",
            optStats.instructionsBefore, optStats.instructionsAfter, removed, pct);
 }
+
+/* -O0 keeps the IR unchanged so the MIPS arithmetic path can be tested and
+ * shown in a video even when constant propagation removes every addition. */
+void copyTACWithoutOptimization(void) {
+    memset(&optStats,0,sizeof optStats);
+    optimizedList=copyList(&tacList);
+    optStats.instructionsBefore=countTAC(&tacList);
+    optStats.instructionsAfter=countTAC(&optimizedList);
+}
+static void freeList(TACList* list) {
+    TACInstr* n=list->head;
+    while(n) {
+        TACInstr* next=n->next;
+        free(n->arg1); free(n->arg2); free(n->result); free(n); n=next;
+    }
+    list->head=list->tail=NULL;
+}
+void freeTAC(void) { freeList(&tacList); freeList(&optimizedList); }

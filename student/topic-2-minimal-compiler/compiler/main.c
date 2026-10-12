@@ -11,11 +11,9 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 /* ============================================================================
@@ -35,7 +33,7 @@
  * the work of fixing it.
  *
  * USAGE
- *   ./minicompiler <input.c> <output.s> [-q]
+ *   ./minicompiler <input.c> <output.s> [-q] [-O0]
  *
  *   -q   quiet: print only errors and the final summary.  Use this once the
  *        trace stops being useful and you just want the assembly.
@@ -52,6 +50,11 @@
 #include "semantic.h"
 #include "codegen.h"
 #include "tac.h"
+#include "symtab.h"
+#include "parse_tree.h"
+#include <sys/stat.h>
+extern int lexicalErrors, syntaxErrors;
+extern ParseTree* parseTreeRoot;
 
 extern int yyparse(void);
 extern FILE* yyin;
@@ -66,8 +69,8 @@ int quiet = 0;   /* Set by -q; consulted by the banner helpers below */
  * -------------------------------------------------------------------------*/
 #define NUM_PHASES 6
 static const char* phaseName[NUM_PHASES] = {
-    "1. Lexical + syntax analysis",
-    "2. AST construction",
+    "1. Lexing, parsing and tree construction",
+    "2. Tree display",
     "3. Semantic analysis",
     "4. Intermediate code (TAC)",
     "5. Optimization",
@@ -92,18 +95,37 @@ static void deriveTacNames(const char* out, char* tac, char* opt) {
     const char* dot   = strrchr(out, '.');
     const char* slash = strrchr(out, '/');
     size_t base = (dot && (!slash || dot > slash)) ? (size_t)(dot - out) : strlen(out);
-    snprintf(tac, 256, "%.*s.tac", (int)base, out);
-    snprintf(opt, 256, "%.*s.optimized.tac", (int)base, out);
+    snprintf(tac, 4096, "%.*s.tac", (int)base, out);
+    snprintf(opt, 4096, "%.*s.optimized.tac", (int)base, out);
 }
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        printf("Usage: %s <input.c> <output.s> [-q]\n", argv[0]);
+        printf("Usage: %s <input.c> <output.s> [-q] [-O0]\n", argv[0]);
         printf("Example: ./minicompiler test.c test.s\n");
         return 1;
     }
-    for (int i = 3; i < argc; i++)
-        if (strcmp(argv[i], "-q") == 0) quiet = 1;
+    int optimize=1;
+    for (int i=3;i<argc;i++) {
+        if(strcmp(argv[i],"-q")==0) quiet=1;
+        else if(strcmp(argv[i],"-O0")==0) optimize=0;
+        else { fprintf(stderr,"Unknown option: %s\n",argv[i]); return 1; }
+    }
+    if(strlen(argv[2])>4000) { fprintf(stderr,"Output path is too long\n"); return 1; }
+    char tacFile[4096], optTacFile[4096];
+    deriveTacNames(argv[2],tacFile,optTacFile);
+    const char* outputs[]={argv[2],tacFile,optTacFile};
+    struct stat src, dst;
+    if(stat(argv[1],&src)==0) {
+        for(int i=0;i<3;i++) {
+            if(stat(outputs[i],&dst)==0 && src.st_dev==dst.st_dev && src.st_ino==dst.st_ino) {
+                fprintf(stderr,"Output must not overwrite the source file\n"); return 1;
+            }
+        }
+    }
+    if(strcmp(argv[2],tacFile)==0 || strcmp(argv[2],optTacFile)==0) {
+        fprintf(stderr,"Choose an assembly filename ending in .s\n"); return 1;
+    }
 
     yyin = fopen(argv[1], "r");
     if (!yyin) {
@@ -130,19 +152,22 @@ int main(int argc, char* argv[]) {
     int parseFailed = yyparse();
     endPhase(0);
 
-    if (parseFailed != 0 || root == NULL) {
+    if (parseFailed != 0 || lexicalErrors != 0 || syntaxErrors != 0 || root == NULL) {
         printf("\n✗ Compilation stopped: the program is not syntactically valid.\n");
         printf("  Fix the errors listed above and compile again.\n");
+        freeAST(root); freeParseTree(parseTreeRoot);
         fclose(yyin);
         return 1;
     }
-    if (!quiet) printf("✓ Parse succeeded — the program matches the grammar.\n");
+    if (!quiet) printf("Lexical and syntax analysis passed: no errors found.\n");
 
     beginPhase(1);
     if (!quiet) {
         printf("The AST is the program with the punctuation thrown away:\n");
         printf("only the structure that later phases actually need survives.\n\n");
         printAST(root, 0);
+        printf("\nCONCRETE PARSE TREE (including punctuation)\n");
+        printParseTree(parseTreeRoot,0);
     }
     endPhase(1);
 
@@ -160,6 +185,7 @@ int main(int argc, char* argv[]) {
         printf("\n✗ Compilation stopped: the program is syntactically valid but\n");
         printf("  does not mean anything the compiler can translate.  See the\n");
         printf("  semantic errors listed above.\n");
+        freeAST(root); freeParseTree(parseTreeRoot);
         fclose(yyin);
         return 1;
     }
@@ -172,14 +198,14 @@ int main(int argc, char* argv[]) {
     initTAC();
     generateTAC(root);
     if (!quiet) printTAC();
-    char tacFile[256], optTacFile[256];
-    deriveTacNames(argv[2], tacFile, optTacFile);
+
     saveTACToFile(tacFile);
     endPhase(3);
 
     /* ---------------- PHASE 5: optimization ------------------------------- */
     beginPhase(4);
-    optimizeTAC();
+    if(optimize) optimizeTAC();
+    else copyTACWithoutOptimization();
     if (!quiet) printOptimizedTAC();
     saveOptimizedTACToFile(optTacFile);
     endPhase(4);
@@ -217,6 +243,7 @@ int main(int argc, char* argv[]) {
     printf("\n  Next step: run it.\n");
     printf("    spim -file %s        (or open %s in QtSPIM)\n\n", argv[2], argv[2]);
 
+    freeAST(root); freeParseTree(parseTreeRoot); freeTAC(); freeSymTab();
     fclose(yyin);
     return 0;
 }

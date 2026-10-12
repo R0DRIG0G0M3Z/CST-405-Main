@@ -11,11 +11,9 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 /* ============================================================================
@@ -62,10 +60,10 @@ static Symbol* findIn(SymbolTable* t, const char* name) {
  * Internal: append a symbol to a table, or return NULL if the table is full.
  * -------------------------------------------------------------------------*/
 static Symbol* appendTo(SymbolTable* t, const char* name, const char* type) {
-    if (t->count >= MAX_VARS) {
+    if (t->count >= MAX_VARS + 100) {
         fprintf(stderr,
-                "Symbol table overflow: more than %d names in one scope "
-                "(while declaring '%s')\n", MAX_VARS, name);
+                "Symbol table overflow: more than %d names in one storage table "
+                "(while declaring '%s')\n", MAX_VARS + 100, name);
         exit(1);
     }
     Symbol* s      = &t->vars[t->count++];
@@ -89,19 +87,12 @@ void initSymTab(void) {
 }
 
 int addVar(char* name, char* type) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — DECLARE A VARIABLE
-     * Add `name` to the local table and give it a home in the frame.
-     * Return the byte offset you assigned, or -1 if the name is already
-     * declared — the caller uses -1 to report a duplicate declaration.
-     *
-     * Each int takes 4 bytes, and offsets run upward from 0.  So the first
-     * variable lives at 0($sp), the second at 4($sp), and nextOffset is
-     * simply the running total.
-     *
-     * findIn() and appendTo() above do the searching and the allocation.
-     * ---------------------------------------------------------------- */
-    return -1;
+    /* Four bytes per integer. A duplicate cannot reserve a second slot. */
+    if (findIn(&locals, name)) return -1;
+    Symbol* s = appendTo(&locals, name, type);
+    s->offset = locals.nextOffset;
+    locals.nextOffset += 4;
+    return s->offset;
 }
 
 int addArray(char* name, int size) {
@@ -164,15 +155,10 @@ int addGlobalArray(char* name, int size) {
  * ========================================================================*/
 
 Symbol* lookupSymbol(const char* name) {
-    /* ----------------------------------------------------------------
-     * TODO (Topic 2) — RESOLVE A NAME
-     * Return the symbol for `name`, or NULL if it is not declared.
-     * Search the LOCAL table first and the GLOBAL table second: that order is
-     * what makes an inner declaration shadow an outer one, and it is the
-     * entire implementation of scoping at this milestone.
-     * ---------------------------------------------------------------- */
-    (void)name;
-    return NULL;
+    if (!name) return NULL;
+    Symbol* s = findIn(&locals, name);
+    if (s) return s;
+    return globalsReady ? findIn(&globals, name) : NULL;
 }
 
 int getVarOffset(char* name) {
@@ -240,4 +226,11 @@ void printSymTab(void) {
         for (int i = 0; i < locals.count; i++) printOne(&locals.vars[i]);
     }
     trace("  └────────────────────────────────────────────────────────────┘\n\n");
+}
+
+/* Release owned strings at the end of compilation. */
+void freeSymTab(void) {
+    for(int i=0;i<locals.count;i++) { free(locals.vars[i].name); free(locals.vars[i].type); }
+    for(int i=0;i<globals.count;i++) { free(globals.vars[i].name); free(globals.vars[i].type); }
+    locals.count=globals.count=0;
 }

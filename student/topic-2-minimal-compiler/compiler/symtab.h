@@ -11,11 +11,9 @@
  * WHAT COMES NEXT
  *   Topic 3 adds functions, arrays and the rest of arithmetic — and with them, real activation records.
  *
- * YOUR TASK
- *   This is Project 2: the first compiler you build end to end.  Sections
- *   marked  TODO (Topic 2)  are yours.  Everything else — the headers, the
- *   scanner, the driver, the register allocator — is given, because the
- *   point of this project is the six PHASES, not the plumbing between them.
+ * PROJECT 2 IMPLEMENTATION
+ *   Interfaces and register/storage foundations are adapted from the course
+ *   starter by Isac Artzi. Completed implementation is described in README.
  * ========================================================================= */
 
 #ifndef SYMTAB_H
@@ -69,7 +67,7 @@ typedef struct {
  * not change, which is exactly why the interface is worth isolating.
  * -------------------------------------------------------------------------*/
 typedef struct {
-    Symbol vars[MAX_VARS];
+    Symbol vars[MAX_VARS + 100]; /* User names plus compiler temporaries */
     int    count;       /* Number of symbols currently stored               */
     int    nextOffset;  /* Next free byte offset in the frame (locals only) */
 } SymbolTable;
@@ -121,5 +119,7 @@ int getLocalBytes(void);
 /* Print the current tables. Used by the -v trace so students can watch
  * storage being allocated as each declaration is processed. */
 void printSymTab(void);
+
+void freeSymTab(void);
 
 #endif
