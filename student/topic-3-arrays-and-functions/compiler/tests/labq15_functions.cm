@@ -1,0 +1,15 @@
+int add(int a, int b) {
+    return a + b;
+}
+
+int doubleValue(int x) {
+    return x + x;
+}
+
+int main() {
+    int result;
+    result = add(2, 3);
+    result = doubleValue(result);
+    print(result);
+    return 0;
+}

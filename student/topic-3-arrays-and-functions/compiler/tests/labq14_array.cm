@@ -1,0 +1,2 @@
+int numbers[3];
+print(numbers[1]);
