@@ -1,21 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: symtab.h   —   Phases 3 & 6 — Symbol table / storage map
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *
- * WHAT IS NEW IN TOPIC 3
- *   • Split into a global table (.data) and a per-function table (the frame)
- *   • Arrays record their element count; array parameters record that the slot holds an address
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked  TODO (Topic 3)  is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested.  Do not rewrite it; extend it.
+ * FILE: symtab.h   —   Phases 3 & 6 — Storage symbol table interface
+ * INPUT: declarations discovered while laying out globals and function frames
+ * OUTPUT: labels and stack offsets used by code generation
  * ========================================================================= */
 
 #ifndef SYMTAB_H

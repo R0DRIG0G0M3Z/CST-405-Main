@@ -1,6 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
  * FILE: semantic.c   —   Phase 3 — Semantic analysis
+ * INPUT: AST from the parser
+ * OUTPUT: validated AST plus function and visibility information
  * ========================================================================= */
 
 #include <stdio.h>
@@ -14,6 +16,7 @@
 #define MAX_FUNCTIONS 100
 #define MAX_PARAMS 20
 #define MAX_SCOPE_DEPTH 10
+#define MAX_CALL_ARGS 4
 
 
 typedef struct {
@@ -615,6 +618,12 @@ static void checkExpr(
 
                     semInfo.errorCount++;
 
+                } else if (count > MAX_CALL_ARGS) {
+                    fprintf(stderr,
+                            "SEMANTIC ERROR line %d: at most %d arguments are supported\n",
+                            node->lineno, MAX_CALL_ARGS);
+                    semInfo.errorCount++;
+
                 } else {
                     trace(
                         "  ✓ Function call '%s' has correct argument count\n",
@@ -839,6 +848,11 @@ static void checkStmt(
 
             break;
 
+        case NODE_IF:
+            checkExpr(node->data.if_stmt.condition);
+            checkStmt(node->data.if_stmt.then_branch);
+            break;
+
 
         case NODE_BLOCK:
             enterScope();
@@ -1033,6 +1047,13 @@ static void registerFunction(
             node->data.func_def.params,
             paramNames,
             paramIsArray);
+
+    if (count > MAX_CALL_ARGS) {
+        fprintf(stderr,
+                "SEMANTIC ERROR line %d: function '%s' has %d parameters; maximum is %d\n",
+                node->lineno, node->data.func_def.name, count, MAX_CALL_ARGS);
+        semInfo.errorCount++;
+    }
 
     addFunction(
         node->data.func_def.name,

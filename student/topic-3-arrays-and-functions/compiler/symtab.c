@@ -1,20 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: symtab.c   —   Phases 3 & 6 — Symbol table / storage map
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *
- * WHAT IS NEW IN TOPIC 3
- *   • Storage is now assigned per function, not once for the whole program
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked  TODO (Topic 3)  is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested.  Do not rewrite it; extend it.
+ * FILE: symtab.c   —   Phases 3 & 6 — Storage symbol table
+ * INPUT: scalar, array, parameter, and temporary declarations from TAC
+ * OUTPUT: global labels and per-function stack offsets for codegen.c
  * ========================================================================= */
 
 /* ============================================================================

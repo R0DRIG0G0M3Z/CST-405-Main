@@ -1,20 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: semantic.h   —   Phase 3 — Semantic analysis
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *                               ^^^^^^^^  this file
- *
- * UNCHANGED SINCE TOPIC 2 — the interfaces held, which is the point
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked  TODO (Topic 3)  is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested.  Do not rewrite it; extend it.
+ * FILE: semantic.h   —   Phase 3 — Semantic analysis interface
+ * INPUT: abstract syntax tree from Phase 2
+ * OUTPUT: semantic pass/fail result used before TAC generation
  * ========================================================================= */
 
 #ifndef SEMANTIC_H

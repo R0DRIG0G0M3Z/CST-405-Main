@@ -1,22 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
  * FILE: scanner.l   —   Phase 1 — Lexical analysis
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *   ^^^^^^^  this file
- *
- * WHAT IS NEW IN TOPIC 3
- *   • Tokens for `[`, `]`, `,`, `{`, `}` and the arithmetic operators
- *   • `return` keyword for functions
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked TODO (Topic 3) is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested. Do not rewrite it; extend it.
+ * INPUT: C-Minus source characters
+ * OUTPUT: tokens and token values consumed by parser.y
  * ========================================================================= */
 
 %{
@@ -34,6 +20,7 @@
 "int"           { return INT; }
 "print"         { return PRINT; }
 "return"        { return RETURN; }
+"if"            { return IF; }
 
 [a-zA-Z_][a-zA-Z0-9_]* {
     yylval.str = strdup(yytext);

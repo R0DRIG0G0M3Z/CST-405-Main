@@ -1,20 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: tac.h   —   Phases 4 & 5 — Intermediate code and optimization
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *                                           ^^^  this file
- *
- * UNCHANGED SINCE TOPIC 2 — the interfaces held, which is the point
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked  TODO (Topic 3)  is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested.  Do not rewrite it; extend it.
+ * FILE: tac.h   —   Phases 4 & 5 — TAC and optimization interface
+ * INPUT: validated AST from semantic analysis
+ * OUTPUT: TAC instruction lists consumed by codegen.c
  * ========================================================================= */
 
 #ifndef TAC_H

@@ -1,6 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
  * FILE: tac.c   —   Phases 4 & 5 — Intermediate code and optimization
+ * INPUT: semantically valid AST
+ * OUTPUT: TAC before and after the optimization pass
  * ========================================================================= */
 
 #include <stdio.h>
@@ -616,6 +618,18 @@ static void generateStmt(
 
             freeTemp(value);
 
+            break;
+        }
+
+        case NODE_IF: {
+            char* condition = generateTACExpr(node->data.if_stmt.condition);
+            char* endLabel = newLabel();
+
+            appendTAC(createTAC(TAC_IF_FALSE, condition, NULL, endLabel));
+            freeTemp(condition);
+            generateStmt(node->data.if_stmt.then_branch);
+            appendTAC(createTAC(TAC_LABEL, NULL, NULL, endLabel));
+            free(endLabel);
             break;
         }
 

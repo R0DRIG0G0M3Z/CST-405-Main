@@ -1,6 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: ast.c   —   Phase 2 — AST implementation
+ * FILE: ast.c   —   Phase 2 — Abstract syntax tree implementation
+ * INPUT: values and child nodes created by parser.y
+ * OUTPUT: the AST consumed by semantic.c and tac.c
  * ========================================================================= */
 
 #include <stdio.h>
@@ -306,6 +308,15 @@ ASTNode* createReturn(
     node->data.ret.expr =
         expr;
 
+    return node;
+}
+
+ASTNode* createIf(ASTNode* condition, ASTNode* then_branch) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_IF;
+    node->lineno = yylineno;
+    node->data.if_stmt.condition = condition;
+    node->data.if_stmt.then_branch = then_branch;
     return node;
 }
 
@@ -677,6 +688,12 @@ void printAST(
                     level + 1);
             }
 
+            break;
+
+        case NODE_IF:
+            printf("IF\n");
+            printAST(node->data.if_stmt.condition, level + 1);
+            printAST(node->data.if_stmt.then_branch, level + 1);
             break;
 
 

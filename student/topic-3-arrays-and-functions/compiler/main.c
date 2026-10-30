@@ -1,20 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: main.c   —   The driver — runs all six phases in order
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *
- * WHAT IS NEW IN TOPIC 3
- *   • Reports the storage map for each function as it is generated
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked  TODO (Topic 3)  is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested.  Do not rewrite it; extend it.
+ * FILE: main.c   —   Compiler driver
+ * INPUT: source and output filenames from the command line
+ * OUTPUT: phase trace, TAC files, and generated MIPS assembly
  * ========================================================================= */
 
 /* ============================================================================

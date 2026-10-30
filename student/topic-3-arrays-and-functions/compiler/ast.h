@@ -1,6 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
- * FILE: ast.h   —   Phase 2 — Syntax analysis (the tree it builds)
+ * FILE: ast.h   —   Phase 2 — Abstract syntax tree interface
+ * INPUT: grammar reductions from parser.y
+ * OUTPUT: node definitions shared by semantic analysis and TAC generation
  * ========================================================================= */
 
 #ifndef AST_H
@@ -21,6 +23,7 @@ typedef enum {
     NODE_FUNC_CALL,
     NODE_ARG_LIST,
     NODE_RETURN,
+    NODE_IF,
 
     NODE_BLOCK,
     NODE_ARRAY_DECL,
@@ -89,6 +92,11 @@ typedef struct ASTNode {
         struct {
             struct ASTNode* expr;
         } ret;
+
+        struct {
+            struct ASTNode* condition;
+            struct ASTNode* then_branch;
+        } if_stmt;
 
         struct {
             struct ASTNode* stmt_list;
@@ -161,6 +169,10 @@ ASTNode* createArgList(
 
 ASTNode* createReturn(
     ASTNode* expr);
+
+ASTNode* createIf(
+    ASTNode* condition,
+    ASTNode* then_branch);
 
 
 /* Blocks */

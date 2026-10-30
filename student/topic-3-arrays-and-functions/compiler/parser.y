@@ -1,24 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
  * FILE: parser.y   —   Phase 2 — Syntax analysis
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *              ^^^^^^  this file
- *
- * WHAT IS NEW IN TOPIC 3
- *   • A program is now a list of declarations AND function definitions
- *   • Array declaration `int a[10];`, indexing `a[i]`, and array parameters `int a[]`
- *   • Full arithmetic with precedence: + - * / , parentheses, unary minus
- *   • Function definitions, parameter lists, calls, and `return`
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked TODO (Topic 3) is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested. Do not rewrite it; extend it.
+ * INPUT: tokens from scanner.l
+ * OUTPUT: an abstract syntax tree rooted at `root`
  * ========================================================================= */
 
 %{
@@ -35,6 +19,11 @@ extern int yylineno;
 void yyerror(const char* s);
 
 ASTNode* root = NULL;
+
+/* A legacy Topic 2 program has no function definition.  Keeping that form
+ * valid lets the previous regression tests run unchanged; it is wrapped in
+ * an implicit main function after parsing. */
+static int containsFunction(ASTNode* node);
 %}
 
 %union {
@@ -45,7 +34,7 @@ ASTNode* root = NULL;
 
 %token <num> NUM
 %token <str> ID
-%token INT PRINT RETURN
+%token INT PRINT RETURN IF
 
 %type <node> program
 %type <node> decl_or_func_list decl_or_func
@@ -56,6 +45,7 @@ ASTNode* root = NULL;
 %type <node> expr
 %type <node> func_call args arg_list
 %type <node> print_stmt
+%type <node> if_stmt
 
 %left '+' '-'
 %left '*' '/'
@@ -65,7 +55,9 @@ ASTNode* root = NULL;
 
 program:
     decl_or_func_list {
-        root = $1;
+        root = containsFunction($1)
+             ? $1
+             : createFuncDef("main", NULL, createBlock($1));
     }
     ;
 
@@ -82,7 +74,7 @@ decl_or_func:
     func_def {
         $$ = $1;
     }
-    | decl {
+    | stmt {
         $$ = $1;
     }
     ;
@@ -151,6 +143,7 @@ stmt:
     | func_call ';' {
         $$ = $1;
     }
+    | if_stmt
     ;
 
 decl:
@@ -255,6 +248,14 @@ print_stmt:
     }
     ;
 
+/* A small truthy/falsy branch is included here because Project 3 requires a
+ * recursive factorial demonstration.  Full if/else syntax remains Topic 5. */
+if_stmt:
+    IF '(' expr ')' stmt {
+        $$ = createIf($3, $5);
+    }
+    ;
+
 %%
 
 void yyerror(const char* s) {
@@ -262,4 +263,12 @@ void yyerror(const char* s) {
             "Syntax Error at line %d: %s\n",
             yylineno,
             s);
+}
+
+static int containsFunction(ASTNode* node) {
+    if (!node) return 0;
+    if (node->type == NODE_FUNC_DEF) return 1;
+    if (node->type != NODE_STMT_LIST) return 0;
+    return containsFunction(node->data.stmtlist.stmt) ||
+           containsFunction(node->data.stmtlist.next);
 }

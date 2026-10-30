@@ -1,6 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
  * FILE: codegen.c   —   Phase 6 — MIPS code generation
+ * INPUT: optimized three-address code from tac.c
+ * OUTPUT: MIPS assembly that runs in SPIM or QtSPIM
  * ========================================================================= */
 
 #include <stdio.h>
@@ -1240,6 +1242,25 @@ void generateMIPSFromTAC(
                             currentFunc));
 
                     break;
+
+                case TAC_LABEL:
+                    flushRegisters("control-flow label");
+                    fprintf(out, "%s:\n", i->result);
+                    break;
+
+                case TAC_GOTO:
+                    flushRegisters("before jump");
+                    fprintf(out, "    j    %s\n", i->result);
+                    break;
+
+                case TAC_IF_FALSE: {
+                    int condition = operandRegister(i->arg1);
+                    /* Dirty values must reach memory on both branch paths. */
+                    flushRegisters("before conditional branch");
+                    fprintf(out, "    beq  $t%d, $zero, %s\n",
+                            condition, i->result);
+                    break;
+                }
 
 
                 case TAC_ARRAY_LOAD: {

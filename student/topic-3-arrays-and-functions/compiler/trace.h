@@ -1,19 +1,8 @@
 /* =========================================================================
  * CST-405  ·  TOPIC 3  ·  Compiling Complex Variables and Functions
  * FILE: trace.h   —   Shared tracing helper
- * -------------------------------------------------------------------------
- * THE PIPELINE, AND WHERE THIS FILE SITS IN IT
- *   scanner -> parser -> ast -> semantic -> tac -> codegen
- *
- * UNCHANGED SINCE TOPIC 2 — the interfaces held, which is the point
- *
- * WHAT COMES NEXT
- *   Topic 4 adds loops (while, for, break) and the label/jump machinery they need.
- *
- * YOUR TASK
- *   Everything below marked  TODO (Topic 3)  is yours to write.
- *   Everything else already works — it is the Topic 2 compiler you
- *   have already built and tested.  Do not rewrite it; extend it.
+ * INPUT: optional diagnostic messages from every phase
+ * OUTPUT: human-readable trace unless quiet mode is enabled
  * ========================================================================= */
 
 #ifndef TRACE_H
