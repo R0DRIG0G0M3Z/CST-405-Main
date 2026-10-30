@@ -1,0 +1,11 @@
+/* Expected output: 7
+ * main calls helper before its definition. The semantic analyzer accepts this
+ * because pass 1 records every function signature before pass 2 checks calls. */
+int main() {
+    print(helper(3));
+    return 0;
+}
+
+int helper(int value) {
+    return value + 4;
+}

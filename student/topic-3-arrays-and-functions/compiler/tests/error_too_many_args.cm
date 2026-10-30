@@ -1,0 +1,9 @@
+/* EXPECTED TO FAIL semantic analysis because the MIPS calling convention in
+ * this project only provides $a0 through $a3 for arguments. */
+int five(int a, int b, int c, int d, int e) {
+    return a + b + c + d + e;
+}
+
+int main() {
+    return five(1, 2, 3, 4, 5);
+}

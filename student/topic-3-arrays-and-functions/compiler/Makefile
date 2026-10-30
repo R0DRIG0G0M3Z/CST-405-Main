@@ -51,16 +51,11 @@ tac.o:      tac.c tac.h ast.h trace.h
 	$(CC) $(CFLAGS) -c tac.c
 
 # ----------------------------------------------------------------------------
-# Compile every tests/*.cm file and run the result in SPIM.  Each test file
-# states its expected output in a header comment; compare and you have a
-# regression suite.
+# Build and run the positive Topic 3 and Topic 2 regression tests, then confirm
+# that the intentional syntax and semantic error programs are rejected.
 # ----------------------------------------------------------------------------
 test: $(TARGET)
-	@for f in tests/*.cm; do \
-	   echo "── $$f ─────────────────────────────────────────"; \
-	   ./$(TARGET) $$f $${f%.cm}.s -q > /dev/null || { echo "  COMPILE FAILED"; continue; }; \
-	   spim -file $${f%.cm}.s 2>/dev/null | grep -v '^Loaded'; \
-	done
+	@bash tests/run_tests.sh
 
 clean:
 	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h parser.output

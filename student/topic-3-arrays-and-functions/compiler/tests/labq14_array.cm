@@ -1,2 +1,4 @@
+/* Expected output: 7 */
 int numbers[3];
+numbers[1] = 7;
 print(numbers[1]);

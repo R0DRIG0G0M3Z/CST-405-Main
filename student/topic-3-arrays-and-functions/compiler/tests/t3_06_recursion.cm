@@ -1,0 +1,12 @@
+/* Expected output: 120
+ * The base case returns 1 when n is zero. Each recursive call receives its
+ * own activation record, so the saved n and return address stay independent. */
+int factorial(int n) {
+    if (n) return n * factorial(n - 1);
+    return 1;
+}
+
+int main() {
+    print(factorial(5));
+    return 0;
+}

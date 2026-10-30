@@ -1,0 +1,12 @@
+/* Expected output: 5
+ * The print after return must never execute because return jumps directly to
+ * the function epilogue. */
+int choose() {
+    return 5;
+    print(999);
+}
+
+int main() {
+    print(choose());
+    return 0;
+}

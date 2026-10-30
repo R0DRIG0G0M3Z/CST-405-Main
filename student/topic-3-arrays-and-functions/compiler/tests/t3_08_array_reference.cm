@@ -1,0 +1,15 @@
+/* Expected output: 99
+ * The function receives the array's base address. Writing values[1] therefore
+ * changes the caller's array instead of a copy. */
+int replace(int values[]) {
+    values[1] = 99;
+    return values[1];
+}
+
+int main() {
+    int data[3];
+    data[1] = 4;
+    replace(data);
+    print(data[1]);
+    return 0;
+}

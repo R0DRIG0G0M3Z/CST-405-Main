@@ -1,0 +1,13 @@
+/* EXPECTED TO FAIL semantic analysis with five errors:
+ * duplicate local, zero-sized array, undeclared array, undeclared function,
+ * and wrong argument count. */
+int add(int a, int b) { return a + b; }
+
+int main() {
+    int value;
+    int value;
+    int empty[0];
+    missing[0] = 1;
+    unknown();
+    return add(1);
+}
